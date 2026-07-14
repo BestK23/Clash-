@@ -626,7 +626,6 @@ canvas#game{
     G.particles = [];
     G.shakeT = 0;
     G.shakeMag = 0;
-    G.clashT = 0;
     G.clashPhase = null;
     G.wallPlacedThisLevel = false;
     G.trailColor = currentTrailColor();
@@ -845,10 +844,15 @@ canvas#game{
     var dt = Math.min(0.05, (ts-lastT)/1000);
     lastT = ts;
 
-    if(state === 'playing') update(dt);
-    if(state === 'clash') updateClash(dt);
-    updateParticles(dt);
-    render(dt);
+    try{
+      if(state === 'playing') update(dt);
+      if(state === 'clash') updateClash(dt);
+      updateParticles(dt);
+      render(dt);
+    }catch(err){
+      // Never let a single bad frame permanently kill the loop.
+      if(window.console) console.error('SURGE frame error:', err);
+    }
 
     requestAnimationFrame(frame);
   }
@@ -907,8 +911,8 @@ canvas#game{
   /* ---------------- clash sequence ---------------- */
   function startClash(){
     state = 'clash';
-    G.clashT = 0;
     G.clashPhase = 'intro';
+    G.clashPhaseStartedAt = Date.now();
     el.clashBanner.hidden = false;
     el.clashTitle.textContent = 'CLASH!';
     el.clashSub.textContent = fmt(G.power) + '  vs  ' + fmt(G.rivalPower);
@@ -917,9 +921,10 @@ canvas#game{
   }
 
   function updateClash(dt){
-    G.clashT += dt;
-    if(G.clashPhase === 'intro' && G.clashT > 1.1){
+    var elapsed = Date.now() - G.clashPhaseStartedAt;
+    if(G.clashPhase === 'intro' && elapsed > 1100){
       G.clashPhase = 'resolve';
+      G.clashPhaseStartedAt = Date.now();
       var win = G.power >= G.rivalPower;
       if(win){
         el.clashTitle.textContent = 'SIEG!';
@@ -931,8 +936,7 @@ canvas#game{
         sfx.clashLose();
       }
       G.clashResolveWin = win;
-      G.clashT = 0;
-    } else if(G.clashPhase === 'resolve' && G.clashT > 1.0){
+    } else if(G.clashPhase === 'resolve' && elapsed > 1000){
       el.clashBanner.hidden = true;
       el.clashTitle.style.color = '';
       if(G.clashResolveWin){
